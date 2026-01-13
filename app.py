@@ -14,7 +14,31 @@ st.title("📦 AI-Driven Inventory Optimization System")
 st.markdown("""
 Upload your sales dataset to analyze **category-wise demand**,  
 predict **future demand**, and get **inventory recommendations**.
+""")st.subheader("📄 Dataset Requirements")
+
+st.markdown("""
+Your CSV file **must contain the following columns**:
+
+- **Category** → Product category (Electronics / Clothing / Groceries)
+- **Region** → Region or store ID
+- **Price** → Product price
+- **Discount** → Discount percentage
+- **Weather Condition** → Encoded weather value
+- **Promotion** → 0 = No promotion, 1 = Promotion
+- **Seasonality** → Seasonal indicator
+- **Sales_Lag_7** → Sales 7 days ago
+- **Sales_Lag_30** → Sales 30 days ago
+- **Rolling_Mean_7** → 7-day rolling average sales
+- **Actual_Demand** → Actual demand value
+
+⚠️ **File must be in CSV format (.csv)**
 """)
+
+uploaded_file = st.file_uploader(
+    "📤 Upload your sales dataset",
+    type=["csv"]
+)
+
 
 # ---------------- FILE UPLOAD ----------------
 uploaded_file = st.file_uploader("Upload CSV File", type=["csv"])
@@ -159,3 +183,4 @@ if uploaded_file is not None:
 
 else:
     st.info("📂 Please upload a CSV file to start analysis.")
+
