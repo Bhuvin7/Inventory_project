@@ -14,7 +14,8 @@ st.title("📦 AI-Driven Inventory Optimization System")
 st.markdown("""
 Upload your sales dataset to analyze **category-wise demand**,  
 predict **future demand**, and get **inventory recommendations**.
-""")st.subheader("📄 Dataset Requirements")
+""")
+st.subheader("📄 Dataset Requirements")
 
 st.markdown("""
 Your CSV file **must contain the following columns**:
@@ -183,4 +184,5 @@ if uploaded_file is not None:
 
 else:
     st.info("📂 Please upload a CSV file to start analysis.")
+
 
