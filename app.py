@@ -1,17 +1,3 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import mean_squared_error
-
-st.set_page_config(page_title="AI Inventory Optimization", layout="wide")
-
-st.title("📦 AI-Driven Demand Forecasting & Inventory Optimization")
-
-uploaded_file = st.file_uploader("Upload Sales Dataset (CSV)", type=["csv"])
-
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
     df['Date'] = pd.to_datetime(df['Date'], dayfirst=True)
@@ -52,13 +38,15 @@ if uploaded_file is not None:
     st.subheader("📊 Inventory Recommendation Table")
     st.dataframe(results[['Actual_Demand','Predicted_Demand','Reorder_Point','Suggested_Order']].head(20))
     st.success("✅ Inventory recommendations generated successfully!")
+
+    # ✅ ADD DOWNLOAD BUTTON INSIDE THIS BLOCK
+    csv = results.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="Download Results as CSV",
+        data=csv,
+        file_name="inventory_recommendations.csv",
+        mime="text/csv"
+    )
+
 else:
     st.info("Please upload your sales dataset to begin.")
-
-csv = results.to_csv(index=False).encode('utf-8')
-st.download_button(
-    label="Download Results as CSV",
-    data=csv,
-    file_name="inventory_recommendations.csv",
-    mime="text/csv"
-)
