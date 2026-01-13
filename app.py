@@ -7,110 +7,155 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import mean_squared_error
 import plotly.express as px
 
-# -------------------------------
-# Page Config
-# -------------------------------
+# ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="AI Inventory Dashboard", layout="wide")
-st.title("📦 AI-Driven Demand Forecasting & Inventory Optimization")
+st.title("📦 AI-Driven Inventory Optimization System")
 
-# -------------------------------
-# File Upload
-# -------------------------------
-uploaded_file = st.file_uploader("Upload Sales Dataset (CSV)", type=["csv"])
+st.markdown("""
+Upload your sales dataset to analyze **category-wise demand**,  
+predict **future demand**, and get **inventory recommendations**.
+""")
+
+# ---------------- FILE UPLOAD ----------------
+uploaded_file = st.file_uploader("Upload CSV File", type=["csv"])
 
 if uploaded_file is not None:
-    # -------------------------------
-    # Load & Process Data
-    # -------------------------------
+
     df = pd.read_csv(uploaded_file)
 
-    # Make sure columns exist
-    expected_columns = ['Category','Region','Price','Discount','Weather Condition','Promotion','Seasonality','Actual_Demand']
-    if not all(col in df.columns for col in expected_columns):
-        st.error(f"CSV is missing some required columns. Required: {expected_columns}")
-    else:
-        # Feature Engineering
-        df['Sales_Lag_7'] = df.groupby('Category')['Actual_Demand'].shift(7)
-        df['Sales_Lag_30'] = df.groupby('Category')['Actual_Demand'].shift(30)
-        df['Rolling_Mean_7'] = df.groupby('Category')['Actual_Demand'].rolling(7).mean().reset_index(0, drop=True)
+    # ---------------- COLUMN CHECK ----------------
+    required_columns = [
+        'Category', 'Region', 'Price', 'Discount',
+        'Weather Condition', 'Promotion', 'Seasonality',
+        'Actual_Demand'
+    ]
 
-        # Label Encoding
-        le = LabelEncoder()
-        for col in ['Category', 'Region', 'Weather Condition', 'Seasonality']:
-            df[col] = le.fit_transform(df[col])
-        df.dropna(inplace=True)
+    if not all(col in df.columns for col in required_columns):
+        st.error("❌ Dataset does not match required format.")
+        st.stop()
 
-        # Features & Target
-        X = df[['Category','Region','Price','Discount','Weather Condition','Promotion','Seasonality',
-                'Sales_Lag_7','Sales_Lag_30','Rolling_Mean_7']]
-        y = df['Actual_Demand']
+    # ---------------- FEATURE ENGINEERING ----------------
+    df['Sales_Lag_7'] = df.groupby('Category')['Actual_Demand'].shift(7)
+    df['Sales_Lag_30'] = df.groupby('Category')['Actual_Demand'].shift(30)
+    df['Rolling_Mean_7'] = (
+        df.groupby('Category')['Actual_Demand']
+        .rolling(7)
+        .mean()
+        .reset_index(0, drop=True)
+    )
 
-        # Train/Test Split
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+    df.dropna(inplace=True)
 
-        # Model Training
-        model = RandomForestRegressor(n_estimators=300, max_depth=20, random_state=42, n_jobs=-1)
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
-        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+    # ---------------- ENCODING ----------------
+    encoder = LabelEncoder()
+    for col in ['Category', 'Region', 'Weather Condition', 'Seasonality']:
+        df[col] = encoder.fit_transform(df[col])
 
-        # -------------------------------
-        # Inventory Optimization
-        # -------------------------------
-        lead_time = st.slider("Lead Time (days)", 1, 10, 3)
-        safety_stock = 1.65 * rmse
+    # ---------------- SIDEBAR FILTER ----------------
+    st.sidebar.header("🔎 Filter")
+    selected_category = st.sidebar.selectbox(
+        "Select Category", sorted(df['Category'].unique())
+    )
 
-        results = X_test.copy()
-        results['Actual_Demand'] = y_test.values
-        results['Predicted_Demand'] = y_pred
-        results['Reorder_Point'] = (results['Predicted_Demand'] * lead_time + safety_stock).round()
-        results['Suggested_Order'] = results['Reorder_Point']
+    filtered_df = df[df['Category'] == selected_category]
 
-        # -------------------------------
-        # Display Table
-        # -------------------------------
-        st.subheader("📊 Inventory Recommendation Table")
-        st.dataframe(results[['Actual_Demand','Predicted_Demand','Reorder_Point','Suggested_Order']].head(20))
+    # ---------------- MODEL DATA ----------------
+    X = filtered_df[
+        ['Category', 'Region', 'Price', 'Discount',
+         'Weather Condition', 'Promotion', 'Seasonality',
+         'Sales_Lag_7', 'Sales_Lag_30', 'Rolling_Mean_7']
+    ]
 
-        # -------------------------------
-        # Download Button
-        # -------------------------------
-        csv = results.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="Download Results as CSV",
-            data=csv,
-            file_name="inventory_recommendations.csv",
-            mime="text/csv"
-        )
+    y = filtered_df['Actual_Demand']
 
-        # -------------------------------
-        # Charts
-        # -------------------------------
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, shuffle=False
+    )
 
-        # 1. Predicted vs Actual Demand Line Chart
-        st.subheader("📈 Predicted vs Actual Demand")
-        fig1 = px.line(results, y=['Actual_Demand', 'Predicted_Demand'], title='Actual vs Predicted Demand')
-        st.plotly_chart(fig1, use_container_width=True)
+    # ---------------- MODEL ----------------
+    model = RandomForestRegressor(
+        n_estimators=300,
+        max_depth=20,
+        random_state=42,
+        n_jobs=-1
+    )
 
-        # 2. Pie Chart: Stock Distribution
-        st.subheader("🥧 Inventory Stock Distribution")
-        total_actual = results['Actual_Demand'].sum()
-        total_predicted = results['Predicted_Demand'].sum()
-        total_suggested = results['Suggested_Order'].sum()
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
 
-        stock_summary = pd.DataFrame({
-            'Status': ['Current Demand', 'Predicted Demand', 'Suggested Order'],
-            'Units': [total_actual, total_predicted, total_suggested]
-        })
-        fig2 = px.pie(stock_summary, names='Status', values='Units', title='Stock Distribution')
-        st.plotly_chart(fig2, use_container_width=True)
+    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
 
-        # 3. Bar Chart: Top 10 Products by Reorder Point
-        st.subheader("📊 Top 10 Products to Reorder")
-        top_products = results.sort_values(by='Reorder_Point', ascending=False).head(10)
-        fig3 = px.bar(top_products, x=top_products.index, y='Reorder_Point', color='Suggested_Order',
-                      title='Top 10 Products to Reorder', labels={'x':'Record Index','Reorder_Point':'Reorder Point'})
-        st.plotly_chart(fig3, use_container_width=True)
+    # ---------------- INVENTORY LOGIC ----------------
+    lead_time = st.sidebar.slider("Lead Time (Days)", 1, 10, 3)
+    safety_stock = 1.65 * rmse
+
+    results = X_test.copy()
+    results['Actual_Demand'] = y_test.values
+    results['Predicted_Demand'] = y_pred
+    results['Reorder_Point'] = (
+        results['Predicted_Demand'] * lead_time + safety_stock
+    ).round()
+    results['Suggested_Order'] = results['Reorder_Point']
+
+    # ---------------- METRICS ----------------
+    col1, col2, col3 = st.columns(3)
+    col1.metric("RMSE", round(rmse, 2))
+    col2.metric("Avg Predicted Demand", int(results['Predicted_Demand'].mean()))
+    col3.metric("Avg Suggested Order", int(results['Suggested_Order'].mean()))
+
+    # ---------------- TABLE ----------------
+    st.subheader("📋 Inventory Recommendation Table")
+    st.dataframe(
+        results[['Actual_Demand', 'Predicted_Demand',
+                 'Reorder_Point', 'Suggested_Order']]
+    )
+
+    # ---------------- CHARTS ----------------
+
+    # Line Chart
+    st.subheader("📈 Actual vs Predicted Demand")
+    fig1 = px.line(
+        results,
+        y=['Actual_Demand', 'Predicted_Demand'],
+        title="Demand Comparison"
+    )
+    st.plotly_chart(fig1, use_container_width=True)
+
+    # Pie Chart
+    st.subheader("🥧 Inventory Distribution")
+    pie_df = pd.DataFrame({
+        "Type": ["Actual Demand", "Predicted Demand", "Suggested Order"],
+        "Units": [
+            results['Actual_Demand'].sum(),
+            results['Predicted_Demand'].sum(),
+            results['Suggested_Order'].sum()
+        ]
+    })
+
+    fig2 = px.pie(pie_df, names='Type', values='Units')
+    st.plotly_chart(fig2, use_container_width=True)
+
+    # Bar Chart
+    st.subheader("📊 Top Inventory Requirements")
+    top_items = results.sort_values(
+        by='Reorder_Point', ascending=False
+    ).head(10)
+
+    fig3 = px.bar(
+        top_items,
+        y='Reorder_Point',
+        title="Top Items to Reorder"
+    )
+    st.plotly_chart(fig3, use_container_width=True)
+
+    # ---------------- DOWNLOAD ----------------
+    csv = results.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "⬇ Download Inventory Report",
+        csv,
+        "inventory_output.csv",
+        "text/csv"
+    )
 
 else:
-    st.info("Please upload your sales dataset to begin.")
+    st.info("📂 Please upload a CSV file to start analysis.")
