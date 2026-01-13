@@ -54,3 +54,11 @@ if uploaded_file is not None:
     st.success("✅ Inventory recommendations generated successfully!")
 else:
     st.info("Please upload your sales dataset to begin.")
+
+csv = results.to_csv(index=False).encode('utf-8')
+st.download_button(
+    label="Download Results as CSV",
+    data=csv,
+    file_name="inventory_recommendations.csv",
+    mime="text/csv"
+)
