@@ -1,3 +1,19 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import mean_squared_error
+
+# Page setup
+st.set_page_config(page_title="AI Inventory Optimization", layout="wide")
+st.title("📦 AI-Driven Demand Forecasting & Inventory Optimization")
+
+# 1️⃣ File uploader
+uploaded_file = st.file_uploader("Upload Sales Dataset (CSV)", type=["csv"])
+
+# 2️⃣ Only process if a file is uploaded
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
     df['Date'] = pd.to_datetime(df['Date'], dayfirst=True)
@@ -15,11 +31,14 @@ if uploaded_file is not None:
     df.dropna(inplace=True)
 
     # Features and target
-    X = df[['Category','Region','Price','Discount','Weather Condition','Promotion','Seasonality','Sales_Lag_7','Sales_Lag_30','Rolling_Mean_7']]
+    X = df[['Category','Region','Price','Discount','Weather Condition','Promotion','Seasonality',
+            'Sales_Lag_7','Sales_Lag_30','Rolling_Mean_7']]
     y = df['Demand']
 
+    # Train-test split
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
+    # Train model
     model = RandomForestRegressor(n_estimators=300, max_depth=20, random_state=42, n_jobs=-1)
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
@@ -37,9 +56,8 @@ if uploaded_file is not None:
 
     st.subheader("📊 Inventory Recommendation Table")
     st.dataframe(results[['Actual_Demand','Predicted_Demand','Reorder_Point','Suggested_Order']].head(20))
-    st.success("✅ Inventory recommendations generated successfully!")
 
-    # ✅ ADD DOWNLOAD BUTTON INSIDE THIS BLOCK
+    # ✅ Download button
     csv = results.to_csv(index=False).encode('utf-8')
     st.download_button(
         label="Download Results as CSV",
