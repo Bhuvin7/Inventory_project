@@ -1,188 +1,167 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import mean_squared_error
-import plotly.express as px
+import matplotlib.pyplot as plt
 
-# ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="AI Inventory Dashboard", layout="wide")
+st.set_page_config(
+    page_title="AI-Driven Inventory Optimization",
+    layout="wide"
+)
+
+# --------------------------------------------------
+# HEADER
+# --------------------------------------------------
 st.title("📦 AI-Driven Inventory Optimization System")
+st.write(
+    "Upload your sales dataset to analyze demand, forecast inventory, "
+    "and receive stock recommendations."
+)
 
-st.markdown("""
-Upload your sales dataset to analyze **category-wise demand**,  
-predict **future demand**, and get **inventory recommendations**.
-""")
-st.subheader("📄 Dataset Requirements")
-
-st.markdown("""
-Your CSV file **must contain the following columns**:
-
-- **Category** → Product category (Electronics / Clothing / Groceries)
-- **Region** → Region or store ID
-- **Price** → Product price
-- **Discount** → Discount percentage
-- **Weather Condition** → Encoded weather value
-- **Promotion** → 0 = No promotion, 1 = Promotion
-- **Seasonality** → Seasonal indicator
-- **Sales_Lag_7** → Sales 7 days ago
-- **Sales_Lag_30** → Sales 30 days ago
-- **Rolling_Mean_7** → 7-day rolling average sales
-- **Actual_Demand** → Actual demand value
-
-⚠️ **File must be in CSV format (.csv)**
-""")
-
+# --------------------------------------------------
+# FILE UPLOAD
+# --------------------------------------------------
 uploaded_file = st.file_uploader(
-    "📤 Upload your sales dataset",
+    "Upload CSV File",
     type=["csv"]
 )
 
+# --------------------------------------------------
+# DATASET REQUIREMENTS
+# --------------------------------------------------
+st.markdown("### 📄 Required CSV Columns")
+st.markdown("""
+Your dataset **must contain** the following columns:
 
-# ---------------- FILE UPLOAD ----------------
-uploaded_file = st.file_uploader("Upload CSV File", type=["csv"])
+- **Category** – Product category (encoded or text)
+- **Region** – Sales region
+- **Price** – Product price
+- **Discount** – Discount percentage
+- **Weather Condition** – Weather indicator
+- **Promotion** – 0 = No, 1 = Yes
+- **Seasonality** – Seasonal indicator
+- **Sales_Lag_7** – Sales 7 days ago
+- **Sales_Lag_30** – Sales 30 days ago
+- **Rolling_Mean_7** – 7-day rolling mean
+- **Actual_Demand** – Real demand
+- **Predicted_Demand** – Model prediction
+- **Reorder_Point** – Inventory reorder level
+- **Suggested_Order** – Recommended order quantity
+""")
 
+# --------------------------------------------------
+# MAIN LOGIC
+# --------------------------------------------------
 if uploaded_file is not None:
-
     df = pd.read_csv(uploaded_file)
 
-    # ---------------- COLUMN CHECK ----------------
-    required_columns = [
-        'Category', 'Region', 'Price', 'Discount',
-        'Weather Condition', 'Promotion', 'Seasonality',
-        'Actual_Demand'
-    ]
+    st.success("✅ Dataset loaded successfully!")
 
-    if not all(col in df.columns for col in required_columns):
-        st.error("❌ Dataset does not match required format.")
-        st.stop()
-
-    # ---------------- FEATURE ENGINEERING ----------------
-    df['Sales_Lag_7'] = df.groupby('Category')['Actual_Demand'].shift(7)
-    df['Sales_Lag_30'] = df.groupby('Category')['Actual_Demand'].shift(30)
-    df['Rolling_Mean_7'] = (
-        df.groupby('Category')['Actual_Demand']
-        .rolling(7)
-        .mean()
-        .reset_index(0, drop=True)
+    # --------------------------------------------------
+    # BASIC METRICS
+    # --------------------------------------------------
+    rmse = np.sqrt(
+        np.mean((df["Actual_Demand"] - df["Predicted_Demand"]) ** 2)
     )
 
-    df.dropna(inplace=True)
+    col1, col2, col3, col4 = st.columns(4)
 
-    # ---------------- ENCODING ----------------
-    encoder = LabelEncoder()
-    for col in ['Category', 'Region', 'Weather Condition', 'Seasonality']:
-        df[col] = encoder.fit_transform(df[col])
-
-    # ---------------- SIDEBAR FILTER ----------------
-    st.sidebar.header("🔎 Filter")
-    selected_category = st.sidebar.selectbox(
-        "Select Category", sorted(df['Category'].unique())
+    col1.metric("Total Sales", int(df["Actual_Demand"].sum()))
+    col2.metric("Avg Predicted Demand", int(df["Predicted_Demand"].mean()))
+    col3.metric("RMSE", round(rmse, 2))
+    col4.metric(
+        "Inventory Alert %",
+        f"{round((df['Suggested_Order'] > df['Actual_Demand']).mean()*100,1)}%"
     )
 
-    filtered_df = df[df['Category'] == selected_category]
+    st.divider()
 
-    # ---------------- MODEL DATA ----------------
-    X = filtered_df[
-        ['Category', 'Region', 'Price', 'Discount',
-         'Weather Condition', 'Promotion', 'Seasonality',
-         'Sales_Lag_7', 'Sales_Lag_30', 'Rolling_Mean_7']
-    ]
-
-    y = filtered_df['Actual_Demand']
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, shuffle=False
+    # --------------------------------------------------
+    # ACTUAL VS PREDICTED BAR CHART
+    # --------------------------------------------------
+    st.subheader("📊 Actual vs Predicted Demand")
+    st.bar_chart(
+        df[["Actual_Demand", "Predicted_Demand"]].head(20)
     )
 
-    # ---------------- MODEL ----------------
-    model = RandomForestRegressor(
-        n_estimators=300,
-        max_depth=20,
-        random_state=42,
-        n_jobs=-1
+    # --------------------------------------------------
+    # DEMAND TREND LINE CHART
+    # --------------------------------------------------
+    st.subheader("📈 Demand Trend")
+    st.line_chart(
+        df[["Actual_Demand", "Predicted_Demand"]]
     )
 
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-
-    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-
-    # ---------------- INVENTORY LOGIC ----------------
-    lead_time = st.sidebar.slider("Lead Time (Days)", 1, 10, 3)
-    safety_stock = 1.65 * rmse
-
-    results = X_test.copy()
-    results['Actual_Demand'] = y_test.values
-    results['Predicted_Demand'] = y_pred
-    results['Reorder_Point'] = (
-        results['Predicted_Demand'] * lead_time + safety_stock
-    ).round()
-    results['Suggested_Order'] = results['Reorder_Point']
-
-    # ---------------- METRICS ----------------
-    col1, col2, col3 = st.columns(3)
-    col1.metric("RMSE", round(rmse, 2))
-    col2.metric("Avg Predicted Demand", int(results['Predicted_Demand'].mean()))
-    col3.metric("Avg Suggested Order", int(results['Suggested_Order'].mean()))
-
-    # ---------------- TABLE ----------------
-    st.subheader("📋 Inventory Recommendation Table")
-    st.dataframe(
-        results[['Actual_Demand', 'Predicted_Demand',
-                 'Reorder_Point', 'Suggested_Order']]
-    )
-
-    # ---------------- CHARTS ----------------
-
-    # Line Chart
-    st.subheader("📈 Actual vs Predicted Demand")
-    fig1 = px.line(
-        results,
-        y=['Actual_Demand', 'Predicted_Demand'],
-        title="Demand Comparison"
-    )
-    st.plotly_chart(fig1, use_container_width=True)
-
-    # Pie Chart
+    # --------------------------------------------------
+    # INVENTORY DISTRIBUTION PIE CHART
+    # --------------------------------------------------
     st.subheader("🥧 Inventory Distribution")
-    pie_df = pd.DataFrame({
-        "Type": ["Actual Demand", "Predicted Demand", "Suggested Order"],
-        "Units": [
-            results['Actual_Demand'].sum(),
-            results['Predicted_Demand'].sum(),
-            results['Suggested_Order'].sum()
-        ]
-    })
 
-    fig2 = px.pie(pie_df, names='Type', values='Units')
-    st.plotly_chart(fig2, use_container_width=True)
+    pie_data = df[["Actual_Demand", "Suggested_Order"]].sum()
 
-    # Bar Chart
-    st.subheader("📊 Top Inventory Requirements")
-    top_items = results.sort_values(
-        by='Reorder_Point', ascending=False
-    ).head(10)
-
-    fig3 = px.bar(
-        top_items,
-        y='Reorder_Point',
-        title="Top Items to Reorder"
+    fig, ax = plt.subplots()
+    ax.pie(
+        pie_data,
+        labels=pie_data.index,
+        autopct="%1.1f%%",
+        startangle=90
     )
-    st.plotly_chart(fig3, use_container_width=True)
+    ax.axis("equal")
+    st.pyplot(fig)
 
-    # ---------------- DOWNLOAD ----------------
-    csv = results.to_csv(index=False).encode("utf-8")
+    st.divider()
+
+    # --------------------------------------------------
+    # CATEGORY-WISE ANALYSIS
+    # --------------------------------------------------
+    st.subheader("🔍 Category-wise Demand Analysis")
+
+    selected_category = st.selectbox(
+        "Select Category",
+        df["Category"].unique()
+    )
+
+    filtered_df = df[df["Category"] == selected_category]
+
+    st.bar_chart(
+        filtered_df[["Actual_Demand", "Predicted_Demand"]]
+    )
+
+    # --------------------------------------------------
+    # LOW STOCK ALERT
+    # --------------------------------------------------
+    st.subheader("⚠️ Low Stock Products")
+
+    low_stock = df[df["Suggested_Order"] > df["Actual_Demand"]]
+
+    st.dataframe(
+        low_stock[
+            [
+                "Category",
+                "Actual_Demand",
+                "Predicted_Demand",
+                "Reorder_Point",
+                "Suggested_Order"
+            ]
+        ].head(10)
+    )
+
+    # --------------------------------------------------
+    # FULL INVENTORY TABLE
+    # --------------------------------------------------
+    st.subheader("📋 Inventory Recommendation Table")
+    st.dataframe(df.head(20))
+
+    # --------------------------------------------------
+    # DOWNLOAD RESULTS
+    # --------------------------------------------------
+    csv = df.to_csv(index=False).encode("utf-8")
     st.download_button(
-        "⬇ Download Inventory Report",
+        "⬇️ Download Results as CSV",
         csv,
-        "inventory_output.csv",
+        "inventory_recommendations.csv",
         "text/csv"
     )
 
 else:
-    st.info("📂 Please upload a CSV file to start analysis.")
-
+    st.info("📂 Please upload a CSV file to begin analysis.")
 
