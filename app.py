@@ -37,7 +37,9 @@ if uploaded_file is not None:
     
     # Ensure Date format
     if 'Date' in df.columns:
-        df['Date'] = pd.to_datetime(df['Date'])
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce', dayfirst=True)
+df = df.dropna(subset=['Date'])
+
 
     # --------------------------------------------------
     # DYNAMIC FILTERS (Make the dashboard interactive)
@@ -173,3 +175,4 @@ else:
     2. Drag and drop that file into the **Sidebar**.
     3. Explore the **Forecasts** and download the **Order List**.
     """)
+
