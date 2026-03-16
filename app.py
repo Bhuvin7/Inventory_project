@@ -224,7 +224,8 @@ if uploaded_file:
     if prod_col: rename[prod_col] = "Product"
     df = df.rename(columns=rename)
 
-    df["Date"] = pd.to_datetime(df["Date"])
+    df["Date"] = pd.to_datetime(df["Date"], infer_datetime_format=True, errors="coerce")
+    df = df.dropna(subset=["Date"])  # drop rows where date couldn't be parsed
     df = df.sort_values("Date").reset_index(drop=True)
 else:
     df = engine.generate_demo_data()
