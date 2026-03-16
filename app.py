@@ -188,8 +188,10 @@ class InventoryEngine:
             future_preds.append(pred)
             history.append(pred)
 
-        importances = dict(zip(feature_cols, model.feature_importances_))
-        return future_preds, mae, rmse, importances, in_sample_idx, all_preds
+        importances    = {k: float(v) for k, v in zip(feature_cols, model.feature_importances_)}
+        all_preds_list = [float(v) for v in all_preds]
+        in_sample_list = [int(i) for i in in_sample_idx]
+        return future_preds, float(mae), float(rmse), importances, in_sample_list, all_preds_list
 
     @staticmethod
     def build_recommendation_table(raw_df, agg_df, in_sample_idx, all_preds,
